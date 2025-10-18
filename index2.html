@@ -1,0 +1,388 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Daily Wiki Puzzle</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+</head>
+<body>
+  <div id="root"></div>
+
+  <script type="module">
+    import React, { useState } from 'https://esm.sh/react@18';
+    import ReactDOM from 'https://esm.sh/react-dom@18';
+    import { Target, X } from 'https://esm.sh/lucide-react@0.263.1';
+
+    const PUZZLES = [
+      {
+        id: 1,
+        date: '2025-10-06',
+        subject: 'Golden Gate Bridge',
+        article: 'The Golden Gate Bridge is a suspension bridge spanning the Golden Gate strait. The bridge connects San Francisco to Marin County. It was the longest suspension bridge span in the world when completed in nineteen thirty seven. The bridge is painted in a distinctive orange vermillion color called international orange. The Golden Gate Bridge is an iconic symbol of San Francisco and California.'
+      },
+      {
+        id: 2,
+        date: '2025-10-05',
+        subject: 'Python',
+        article: 'Python is a high-level programming language. It was created by Guido van Rossum and first released in 1991. Python emphasizes code readability with significant indentation. It supports multiple programming paradigms including structured procedural and object-oriented programming. Python is dynamically typed and garbage-collected. It has a comprehensive standard library.'
+      }
+    ];
+
+    function WikiPuzzle() {
+      const [puzzle] = useState(PUZZLES[0]);
+      const [guessedWords, setGuessedWords] = useState(new Set());
+      const [currentGuess, setCurrentGuess] = useState('');
+      const [guessCount, setGuessCount] = useState(0);
+      const [gameWon, setGameWon] = useState(false);
+      const [revealedSubject, setRevealedSubject] = useState(false);
+      const [incorrectGuesses, setIncorrectGuesses] = useState([]);
+      const [wordHintLevels, setWordHintLevels] = useState({});
+      const [totalHintsUsed, setTotalHintsUsed] = useState(0);
+
+      const words = puzzle.article.toLowerCase().split(/\s+/);
+      const uniqueWords = new Set(words.map(w => w.replace(/[.,!?;:]/g, '')));
+      const subject = puzzle.subject.toLowerCase();
+      
+      const subjectWords = new Set(
+        puzzle.subject.toLowerCase().split(/\s+/).map(w => w.replace(/[.,!?;:]/g, ''))
+      );
+
+      const isSubjectWord = (word) => {
+        const cleanWord = word.toLowerCase().replace(/[.,!?;:]/g, '');
+        return subjectWords.has(cleanWord);
+      };
+
+      const isWordRevealed = (word) => {
+        const cleanWord = word.toLowerCase().replace(/[.,!?;:]/g, '');
+        return guessedWords.has(cleanWord);
+      };
+
+      const cycleWordHint = (word, idx) => {
+        const cleanWord = word.toLowerCase().replace(/[.,!?;:]/g, '');
+        if (isWordRevealed(word)) return;
+        
+        const key = `${idx}-${cleanWord}`;
+        const currentLevel = wordHintLevels[key] || 0;
+        const isSubject = isSubjectWord(word);
+        const maxLevel = isSubject ? 5 : 4;
+        
+        if (currentLevel >= maxLevel) return;
+        
+        const newLevel = currentLevel + 1;
+        
+        setWordHintLevels({
+          ...wordHintLevels,
+          [key]: newLevel
+        });
+        
+        setTotalHintsUsed(totalHintsUsed + 1);
+      };
+
+      const handleGuess = (e) => {
+        if (e) e.preventDefault();
+        if (!currentGuess.trim() || gameWon) return;
+
+        const guess = currentGuess.toLowerCase().trim();
+        setGuessCount(guessCount + 1);
+
+        if (guess === subject) {
+          setGameWon(true);
+          setRevealedSubject(true);
+          setGuessedWords(new Set([...guessedWords, ...uniqueWords]));
+          setCurrentGuess('');
+          return;
+        }
+
+        if (uniqueWords.has(guess)) {
+          setGuessedWords(new Set([...guessedWords, guess]));
+          setCurrentGuess('');
+        } else {
+          if (!incorrectGuesses.includes(guess)) {
+            setIncorrectGuesses([...incorrectGuesses, guess]);
+          }
+          setCurrentGuess('');
+        }
+      };
+
+      const getHintLevel = (word, idx) => {
+        const cleanWord = word.toLowerCase().replace(/[.,!?;:]/g, '');
+        return wordHintLevels[`${idx}-${cleanWord}`] || 0;
+      };
+
+      const getHintDisplay = (word, level, isSubject) => {
+        const cleanWord = word.toLowerCase().replace(/[.,!?;:]/g, '');
+        const originalWord = word.replace(/[.,!?;:]/g, '');
+        const length = cleanWord.length;
+        
+        if (level === 0) return null;
+        
+        if (level === 1) {
+          if (isSubject) {
+            return React.createElement('span', {
+              className: 'flex items-center justify-center text-amber-600'
+            }, React.createElement(Target, { className: 'w-4 h-4' }));
+          }
+          return React.createElement('span', {
+            className: 'text-xs font-bold text-gray-700'
+          }, length);
+        }
+        
+        const effectiveLevel = isSubject ? level - 1 : level;
+        
+        if (effectiveLevel === 1) {
+          return React.createElement('span', {
+            className: 'text-xs font-bold text-gray-700'
+          }, length);
+        }
+        
+        if (effectiveLevel === 2) {
+          return React.createElement('span', {
+            className: 'text-xs font-bold text-gray-700'
+          }, `${originalWord[0]}__ (${length})`);
+        }
+        
+        if (effectiveLevel === 3) {
+          return React.createElement('span', {
+            className: 'text-xs font-bold text-gray-700'
+          }, `${originalWord[0]}...${originalWord[length - 1]} (${length})`);
+        }
+        
+        if (effectiveLevel === 4) {
+          const pattern = originalWord.split('').map((char, i) => {
+            const lowerChar = char.toLowerCase();
+            if (i === 0) return char;
+            if (i === length - 1) return char;
+            if ('aeiouy'.includes(lowerChar)) return char;
+            return '·';
+          }).join(' ');
+          return React.createElement('span', {
+            className: 'text-xs font-bold text-gray-700 tracking-wide'
+          }, pattern);
+        }
+      };
+
+      const renderArticle = () => {
+        return puzzle.article.split(/\s+/).map((word, idx) => {
+          const cleanWord = word.toLowerCase().replace(/[.,!?;:]/g, '');
+          const punctuation = word.match(/[.,!?;:]/g)?.join('') || '';
+          const isRevealed = isWordRevealed(word);
+          const isSubject = isSubjectWord(word);
+          const hintLevel = getHintLevel(word, idx);
+		  const isSubject = isSubjectWord(word);
+          const hintDisplay = getHintDisplay(word, hintLevel, isSubject);
+          const maxLevel = isSubject ? 5 : 4;
+
+          return React.createElement('span', {
+            key: idx,
+            className: 'inline-block mr-1 mb-1'
+          },
+            isRevealed ?
+              React.createElement('span', {
+                className: 'text-blue-600 font-medium'
+              }, word) :
+              React.createElement('span', null,
+                React.createElement('span', {
+                  onClick: () => cycleWordHint(word, idx),
+                  className: `inline-block rounded px-2 py-1 text-transparent select-none cursor-pointer transition-colors relative ${
+                    isSubject && hintLevel > 0 
+                      ? 'bg-amber-200 hover:bg-amber-300' 
+                      : 'bg-gray-300 hover:bg-gray-400'
+                  }`,
+                  title: `Click to reveal hints (${hintLevel}/${maxLevel})${isSubject && hintLevel === 0 ? ' - Part of subject!' : ''}`
+                },
+                  cleanWord,
+                  hintDisplay && React.createElement('span', {
+                    className: 'absolute inset-0 flex items-center justify-center'
+                  }, hintDisplay)
+                ),
+                React.createElement('span', {
+                  className: 'text-gray-800'
+                }, punctuation)
+              )
+          );
+        });
+      };
+
+      return React.createElement('div', {
+        className: 'min-h-screen bg-gradient-to-br from-blue-50 to-purple-50 p-4'
+      },
+        React.createElement('div', {
+          className: 'max-w-4xl mx-auto'
+        },
+          React.createElement('div', {
+            className: 'text-center mb-8 pt-8'
+          },
+            React.createElement('h1', {
+              className: 'text-4xl font-bold text-gray-800 mb-2'
+            }, 'Daily Wiki Puzzle'),
+            React.createElement('p', {
+              className: 'text-gray-600'
+            }, 'Guess words to reveal the article. Find the subject!'),
+            React.createElement('div', {
+              className: 'mt-4 text-sm text-gray-500'
+            }, new Date(puzzle.date).toLocaleDateString('en-US', { 
+              weekday: 'long', 
+              year: 'numeric', 
+              month: 'long', 
+              day: 'numeric' 
+            }))
+          ),
+          
+          React.createElement('div', {
+            className: 'bg-white rounded-lg shadow-lg p-6 mb-6'
+          },
+            React.createElement('div', {
+              className: 'flex justify-around text-center'
+            },
+              React.createElement('div', null,
+                React.createElement('div', {
+                  className: 'text-3xl font-bold text-blue-600'
+                }, guessCount),
+                React.createElement('div', {
+                  className: 'text-sm text-gray-600'
+                }, 'Guesses')
+              ),
+              React.createElement('div', null,
+                React.createElement('div', {
+                  className: 'text-3xl font-bold text-green-600'
+                }, guessedWords.size),
+                React.createElement('div', {
+                  className: 'text-sm text-gray-600'
+                }, 'Hits')
+              ),
+              React.createElement('div', null,
+                React.createElement('div', {
+                  className: 'text-3xl font-bold text-red-600'
+                }, incorrectGuesses.length),
+                React.createElement('div', {
+                  className: 'text-sm text-gray-600'
+                }, 'Misses')
+              ),
+              React.createElement('div', null,
+                React.createElement('div', {
+                  className: 'text-3xl font-bold text-purple-600'
+                }, totalHintsUsed),
+                React.createElement('div', {
+                  className: 'text-sm text-gray-600'
+                }, 'Hints Used')
+              )
+            )
+          ),
+
+          gameWon && React.createElement('div', {
+            className: 'bg-green-100 border-2 border-green-500 rounded-lg p-6 mb-6 text-center'
+          },
+            React.createElement('h2', {
+              className: 'text-2xl font-bold text-green-800 mb-2'
+            }, '🎉 Congratulations!'),
+            React.createElement('p', {
+              className: 'text-green-700 mb-2'
+            },
+              'You found the subject ',
+              React.createElement('span', {
+                className: 'font-bold'
+              }, puzzle.subject),
+              '!'
+            ),
+            React.createElement('div', {
+              className: 'flex justify-center gap-6 text-sm text-green-700'
+            },
+              React.createElement('span', null, React.createElement('strong', null, guessCount), ' guesses'),
+              React.createElement('span', null, React.createElement('strong', null, guessedWords.size), ' hits'),
+              React.createElement('span', null, React.createElement('strong', null, incorrectGuesses.length), ' misses'),
+              React.createElement('span', null, React.createElement('strong', null, totalHintsUsed), ' hints used')
+            )
+          ),
+
+          React.createElement('div', {
+            className: 'bg-white rounded-lg shadow-lg p-6 mb-6'
+          },
+            React.createElement('div', {
+              className: 'flex items-center justify-between mb-4'
+            },
+              React.createElement('h2', {
+                className: 'text-xl font-bold text-gray-800'
+              }, 'The Article'),
+              revealedSubject && React.createElement('div', {
+                className: 'text-lg font-bold text-green-600'
+              }, 'Subject: ', puzzle.subject)
+            ),
+            React.createElement('div', {
+              className: 'text-lg leading-relaxed'
+            }, renderArticle())
+          ),
+
+          !gameWon && React.createElement('div', {
+            className: 'bg-white rounded-lg shadow-lg p-6 mb-6'
+          },
+            React.createElement('div', {
+              className: 'flex gap-2'
+            },
+              React.createElement('input', {
+                type: 'text',
+                value: currentGuess,
+                onChange: (e) => setCurrentGuess(e.target.value),
+                onKeyPress: (e) => {
+                  if (e.key === 'Enter') {
+                    handleGuess(e);
+                  }
+                },
+                placeholder: 'Enter a word or the subject...',
+                className: 'flex-1 px-4 py-3 border-2 border-gray-300 rounded-lg focus:outline-none focus:border-blue-500 text-lg',
+                autoFocus: true
+              }),
+              React.createElement('button', {
+                onClick: handleGuess,
+                className: 'px-6 py-3 bg-blue-600 text-white rounded-lg font-semibold hover:bg-blue-700 transition-colors'
+              }, 'Guess')
+            ),
+            React.createElement('div', {
+              className: 'text-sm text-gray-600 mt-3 space-y-1'
+            },
+              React.createElement('p', null,
+                '💡 ',
+                React.createElement('strong', null, 'Hint System:'),
+                ' Click on any redacted word repeatedly to reveal progressive hints'
+              ),
+              React.createElement('p', {
+                className: 'pl-5'
+              }, '• Regular words: Length → First letter → First+Last → Vowel pattern (4 levels)'),
+              React.createElement('p', {
+                className: 'pl-5'
+              },
+                '• Subject words ',
+                React.createElement(Target, { className: 'w-3 h-3 inline text-amber-600' }),
+                ': Show target icon first, then same hints (5 levels total)'
+              )
+            )
+          ),
+
+          incorrectGuesses.length > 0 && React.createElement('div', {
+            className: 'bg-white rounded-lg shadow-lg p-6'
+          },
+            React.createElement('h3', {
+              className: 'text-lg font-bold text-gray-800 mb-3'
+            }, 'Incorrect Guesses'),
+            React.createElement('div', {
+              className: 'flex flex-wrap gap-2'
+            }, incorrectGuesses.map((word, idx) =>
+              React.createElement('span', {
+                key: idx,
+                className: 'inline-flex items-center px-3 py-1 bg-red-100 text-red-700 rounded-full text-sm'
+              },
+                React.createElement(X, { className: 'w-4 h-4 mr-1' }),
+                word
+              )
+            ))
+          )
+        )
+      );
+    }
+
+    ReactDOM.createRoot(document.getElementById('root')).render(
+      React.createElement(WikiPuzzle)
+    );
+  </script>
+</body>
+</html>

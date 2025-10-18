@@ -1,0 +1,344 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="UTF-8">
+  <script crossorigin src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
+  <script crossorigin src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
+  <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+  <script src="https://cdn.tailwindcss.com"></script>
+</head>
+<body>
+  <div id="root"></div>
+  <script type="text/babel">
+    // PASTE THE ENTIRE COMPONENT CODE HERE (without the "export default WikiPuzzle;" line)
+    
+	
+	import React, { useState, useEffect } from 'react';
+	import { Eye, Check, X } from 'lucide-react';
+
+	// Sample puzzles - in production, these would come from a database
+	const PUZZLES = [
+	  {
+		id: 1,
+		date: '2025-10-06',
+		subject: 'Golden Gate Bridge',
+		article: 'The Golden Gate Bridge is a suspension bridge spanning the Golden Gate strait. The bridge connects San Francisco to Marin County. It was the longest suspension bridge span in the world when completed in nineteen thirty seven. The bridge is painted in a distinctive orange vermillion color called international orange. The Golden Gate Bridge is an iconic symbol of San Francisco and California.'
+	  },
+	  {
+		id: 2,
+		date: '2025-10-05',
+		subject: 'Python',
+		article: 'Python is a high-level programming language. It was created by Guido van Rossum and first released in 1991. Python emphasizes code readability with significant indentation. It supports multiple programming paradigms including structured procedural and object-oriented programming. Python is dynamically typed and garbage-collected. It has a comprehensive standard library.'
+	  },
+	  {
+		id: 3,
+		date: '2025-10-04',
+		subject: 'Pizza',
+		article: 'Pizza is a dish of Italian origin consisting of a flat round base of dough baked with a topping of tomato sauce and cheese. It originated in Naples in the 18th century. Modern pizza was invented in Naples and the dish became popular in many parts of the world. Common toppings include pepperoni mushrooms onions sausage and vegetables.'
+	  }
+	];
+
+	const WikiPuzzle = () => {
+	  const [puzzle] = useState(PUZZLES[0]);
+	  const [guessedWords, setGuessedWords] = useState(new Set());
+	  const [currentGuess, setCurrentGuess] = useState('');
+	  const [guessCount, setGuessCount] = useState(0);
+	  const [gameWon, setGameWon] = useState(false);
+	  const [revealedSubject, setRevealedSubject] = useState(false);
+	  const [incorrectGuesses, setIncorrectGuesses] = useState([]);
+	  const [wordHintLevels, setWordHintLevels] = useState({});
+	  const [totalHintsUsed, setTotalHintsUsed] = useState(0);
+
+	  // Parse article into words
+	  const words = puzzle.article.toLowerCase().split(/\s+/);
+	  const uniqueWords = new Set(words.map(w => w.replace(/[.,!?;:]/g, '')));
+	  const subject = puzzle.subject.toLowerCase();
+
+	  // Parse subject into individual words for matching
+	  const subjectWords = new Set(
+		puzzle.subject.toLowerCase().split(/\s+/).map(w => w.replace(/[.,!?;:]/g, ''))
+	  );
+
+	  // Check if a word is part of the subject
+	  const isSubjectWord = (word) => {
+		const cleanWord = word.toLowerCase().replace(/[.,!?;:]/g, '');
+		return subjectWords.has(cleanWord);
+	  };
+
+	  // Check if a word should be revealed
+	  const isWordRevealed = (word) => {
+		const cleanWord = word.toLowerCase().replace(/[.,!?;:]/g, '');
+		return guessedWords.has(cleanWord);
+	  };
+
+	  // Toggle word hint level (0 -> 1 -> 2 -> 3 -> 4, stops at 4)
+	  const cycleWordHint = (word, idx) => {
+		const cleanWord = word.toLowerCase().replace(/[.,!?;:]/g, '');
+		if (isWordRevealed(word)) return; // Don't toggle if already revealed
+		
+		const key = `${idx}-${cleanWord}`;
+		const currentLevel = wordHintLevels[key] || 0;
+		
+		// Stop at level 4, don't cycle back
+		if (currentLevel >= 4) return;
+		
+		const newLevel = currentLevel + 1;
+		
+		setWordHintLevels({
+		  ...wordHintLevels,
+		  [key]: newLevel
+		});
+		
+		setTotalHintsUsed(totalHintsUsed + 1);
+	  };
+
+	  // Get hint level for a word
+	  const getHintLevel = (word, idx) => {
+		const cleanWord = word.toLowerCase().replace(/[.,!?;:]/g, '');
+		return wordHintLevels[`${idx}-${cleanWord}`] || 0;
+	  };
+
+	  // Generate hint display based on level (cumulative)
+	  const getHintDisplay = (word, level) => {
+		const cleanWord = word.toLowerCase().replace(/[.,!?;:]/g, '');
+		const originalWord = word.replace(/[.,!?;:]/g, ''); // Preserve original casing
+		const length = cleanWord.length;
+		
+		if (level === 0) return null;
+		
+		if (level === 1) {
+		  // Show length only
+		  return <span className="text-xs font-bold text-gray-700">{length}</span>;
+		}
+		
+		if (level === 2) {
+		  // Show first letter + length (preserve case)
+		  return (
+			<span className="text-xs font-bold text-gray-700">
+			  {originalWord[0]}__ ({length})
+			</span>
+		  );
+		}
+		
+		if (level === 3) {
+		  // Show first and last letter + length (preserve case)
+		  return (
+			<span className="text-xs font-bold text-gray-700">
+			  {originalWord[0]}...{originalWord[length - 1]} ({length})
+			</span>
+		  );
+		}
+		
+		if (level === 4) {
+		  // Show full pattern with vowels and first/last letter (preserve case, spaces between chars)
+		  const pattern = originalWord.split('').map((char, i) => {
+			const lowerChar = char.toLowerCase();
+			if (i === 0) return char; // First letter always shown with original case
+			if (i === length - 1) return char; // Last letter always shown with original case
+			if ('aeiouy'.includes(lowerChar)) return char; // Vowels shown with original case (including y)
+			return '·'; // Use middle dot instead of underscore for better spacing
+		  }).join(' '); // Add space between characters
+		  return <span className="text-xs font-bold text-gray-700 tracking-wide">{pattern}</span>;
+		}
+	  };
+
+	  // Handle guess submission
+	  const handleGuess = (e) => {
+		if (e) e.preventDefault();
+		if (!currentGuess.trim() || gameWon) return;
+
+		const guess = currentGuess.toLowerCase().trim();
+		setGuessCount(guessCount + 1);
+
+		// Check if it's the subject
+		if (guess === subject) {
+		  setGameWon(true);
+		  setRevealedSubject(true);
+		  setGuessedWords(new Set([...guessedWords, ...uniqueWords]));
+		  setCurrentGuess('');
+		  return;
+		}
+
+		// Check if word exists in article
+		if (uniqueWords.has(guess)) {
+		  setGuessedWords(new Set([...guessedWords, guess]));
+		  setCurrentGuess('');
+		} else {
+		  if (!incorrectGuesses.includes(guess)) {
+			setIncorrectGuesses([...incorrectGuesses, guess]);
+		  }
+		  setCurrentGuess('');
+		}
+	  };
+
+	  // Render article with redacted words
+	  const renderArticle = () => {
+		return puzzle.article.split(/\s+/).map((word, idx) => {
+		  const cleanWord = word.toLowerCase().replace(/[.,!?;:]/g, '');
+		  const punctuation = word.match(/[.,!?;:]/g)?.join('') || '';
+		  const isRevealed = isWordRevealed(word);
+		  const hintLevel = getHintLevel(word, idx);
+		  const isSubject = isSubjectWord(word);
+		  const hintDisplay = getHintDisplay(word, hintLevel, isSubject);
+
+		  return (
+			<span key={idx} className="inline-block mr-1 mb-1">
+			  {isRevealed ? (
+				<span className="text-blue-600 font-medium">
+				  {word}
+				</span>
+			  ) : (
+				<span>
+				  <span 
+					onClick={() => cycleWordHint(word, idx)}
+					className="inline-block bg-gray-300 rounded px-2 py-1 text-transparent select-none cursor-pointer hover:bg-gray-400 transition-colors relative"
+					title={`Click to reveal hints (${hintLevel}/4)`}
+				  >
+					{cleanWord}
+					{hintDisplay && (
+					  <span className="absolute inset-0 flex items-center justify-center">
+						{hintDisplay}
+					  </span>
+					)}
+				  </span>
+				  <span className="text-gray-800">{punctuation}</span>
+				</span>
+			  )}
+			</span>
+		  );
+		});
+	  };
+
+	  return (
+		<div className="min-h-screen bg-gradient-to-br from-blue-50 to-purple-50 p-4">
+		  <div className="max-w-4xl mx-auto">
+			{/* Header */}
+			<div className="text-center mb-8 pt-8">
+			  <h1 className="text-4xl font-bold text-gray-800 mb-2">Daily Wiki Puzzle</h1>
+			  <p className="text-gray-600">Guess words to reveal the article. Find the subject!</p>
+			  <div className="mt-4 text-sm text-gray-500">
+				{new Date(puzzle.date).toLocaleDateString('en-US', { 
+				  weekday: 'long', 
+				  year: 'numeric', 
+				  month: 'long', 
+				  day: 'numeric' 
+				})}
+			  </div>
+			</div>
+
+			{/* Stats */}
+			<div className="bg-white rounded-lg shadow-lg p-6 mb-6">
+			  <div className="flex justify-around text-center">
+				<div>
+				  <div className="text-3xl font-bold text-blue-600">{guessCount}</div>
+				  <div className="text-sm text-gray-600">Guesses</div>
+				</div>
+				<div>
+				  <div className="text-3xl font-bold text-green-600">{guessedWords.size}</div>
+				  <div className="text-sm text-gray-600">Hits</div>
+				</div>
+				<div>
+				  <div className="text-3xl font-bold text-red-600">{incorrectGuesses.length}</div>
+				  <div className="text-sm text-gray-600">Misses</div>
+				</div>
+				<div>
+				  <div className="text-3xl font-bold text-purple-600">{totalHintsUsed}</div>
+				  <div className="text-sm text-gray-600">Hints Used</div>
+				</div>
+			  </div>
+			</div>
+
+			{/* Game Won Message */}
+			{gameWon && (
+			  <div className="bg-green-100 border-2 border-green-500 rounded-lg p-6 mb-6 text-center">
+				<h2 className="text-2xl font-bold text-green-800 mb-2">🎉 Congratulations!</h2>
+				<p className="text-green-700 mb-2">
+				  You found the subject <span className="font-bold">{puzzle.subject}</span>!
+				</p>
+				<div className="flex justify-center gap-6 text-sm text-green-700">
+				  <span><strong>{guessCount}</strong> guesses</span>
+				  <span><strong>{guessedWords.size}</strong> hits</span>
+				  <span><strong>{incorrectGuesses.length}</strong> misses</span>
+				  <span><strong>{totalHintsUsed}</strong> hints used</span>
+				</div>
+			  </div>
+			)}
+
+			{/* Article Display */}
+			<div className="bg-white rounded-lg shadow-lg p-6 mb-6">
+			  <div className="flex items-center justify-between mb-4">
+				<h2 className="text-xl font-bold text-gray-800">The Article</h2>
+				{revealedSubject && (
+				  <div className="text-lg font-bold text-green-600">
+					Subject: {puzzle.subject}
+				  </div>
+				)}
+			  </div>
+			  <div className="text-lg leading-relaxed">
+				{renderArticle()}
+			  </div>
+			</div>
+
+			{/* Guess Input */}
+			{!gameWon && (
+			  <div className="bg-white rounded-lg shadow-lg p-6 mb-6">
+				<div className="flex gap-2">
+				  <input
+					type="text"
+					value={currentGuess}
+					onChange={(e) => setCurrentGuess(e.target.value)}
+					onKeyPress={(e) => {
+					  if (e.key === 'Enter') {
+						handleGuess(e);
+					  }
+					}}
+					placeholder="Enter a word or the subject..."
+					className="flex-1 px-4 py-3 border-2 border-gray-300 rounded-lg focus:outline-none focus:border-blue-500 text-lg"
+					autoFocus
+				  />
+				  <button
+					onClick={handleGuess}
+					className="px-6 py-3 bg-blue-600 text-white rounded-lg font-semibold hover:bg-blue-700 transition-colors"
+				  >
+					Guess
+				  </button>
+				</div>
+				<p className="text-sm text-gray-600 mt-2">
+				  💡 Tip: Click on any redacted word repeatedly to reveal progressive hints:<br/>
+				  <strong>1st click:</strong> Length • <strong>2nd click:</strong> First letter • <strong>3rd click:</strong> First & last letter • <strong>4th click:</strong> Vowel pattern
+				</p>
+			  </div>
+			)}
+
+			{/* Incorrect Guesses */}
+			{incorrectGuesses.length > 0 && (
+			  <div className="bg-white rounded-lg shadow-lg p-6">
+				<h3 className="text-lg font-bold text-gray-800 mb-3">Incorrect Guesses</h3>
+				<div className="flex flex-wrap gap-2">
+				  {incorrectGuesses.map((word, idx) => (
+					<span
+					  key={idx}
+					  className="inline-flex items-center px-3 py-1 bg-red-100 text-red-700 rounded-full text-sm"
+					>
+					  <X className="w-4 h-4 mr-1" />
+					  {word}
+					</span>
+				  ))}
+				</div>
+			  </div>
+			)}
+		  </div>
+		</div>
+	  );
+	};
+
+
+	
+	
+	
+    // ADD THIS AT THE VERY END:
+    const root = ReactDOM.createRoot(document.getElementById('root'));
+    root.render(<WikiPuzzle />);
+  </script>
+</body>
+</html>
